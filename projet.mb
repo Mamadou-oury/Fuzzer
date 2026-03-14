@@ -1,0 +1,109 @@
+Écrire un fuzzer
+
+L'objectif de ce projet est d'écrire un fuzzer pour une implémentation simple d'un extracteur tar.1
+Ce projet doit être réalisé par groupes de 2 étudiants maximum. Une soumission en solo est
+également acceptée, mais doit être évitée autant que possible.
+
+Le format tar
+tar est un format de fichier pour les archives. Il concatène des fichiers et des en-têtes personnalisés
+dans une archive complète.
+La description de ces en-têtes est disponible à l'adresse
+https://www.gnu.org/software/tar/manual/html_node/Standard.html.
+Pour ce projet, nous utilisons le format POSIX 1003.1-1990.
+Pour créer une archive correspondant à ce format, vous pouvez utiliser
+      tar --posix --pax-option delete=".*" --pax-option delete="*time*" --no-
+xattrs --no-acl --no-selinux -c fichier1 fichier2 ... > archive.tar
+Votre fuzzer ne peut pas utiliser cette commande.
+
+Pour visualiser le contenu hexadécimal de l'archive, utilisez la commande suivante :
+        hexdump -C archive.tar
+
+Qu'est-ce qu'un fuzzer ?
+L'extracteur tar fonctionne correctement pour des fichiers d'entrée conformes à la spécification
+mentionnée ci-dessus.
+Cependant, il plante parfois si le fichier d'entrée n'est pas correctement formaté. Dans ce cas, il
+écrit
+        *** The program has crashed ***
+sur la sortie standard (stdout).
+C'est évidemment très dangereux. Imaginez ce qui pourrait se passer si un tel outil vulnérable
+s'exécutait sur un serveur web, par exemple sur INGInious qui permettrait aux étudiants de
+téléverser leur code sous forme d'archive tar pendant un examen.
+Les experts en sécurité utilisent parfois des outils de fuzzing pour trouver des vulnérabilités dans des
+programmes. Un fuzzer est un outil qui génère des données d'entrée dans le but de faire planter le
+programme testé. Quand de telles données d'entrée sont trouvées, elles sont sauvegardées pour
+pouvoir être analysées plus tard par des experts en sécurité.
+Il existe différents types de fuzzers :
+    1. Dans sa forme la plus simple, un fuzzer génère des fichiers d'entrée purement aléatoires. Un
+       tel fuzzer est facile à écrire mais assez inefficace : la plupart des fichiers d'entrée ne seraient
+       probablement pas acceptés par le programme testé car ils ont un mauvais format.
+    2. Les fuzzers basés sur mutation prennent un fichier d'entrée valide et le modifient légèrement,
+       par exemple en ajoutant des octets supplémentaires à des emplacements aléatoires.
+    3. Les fuzzers basés sur génération produisent des fichiers d'entrée (presque) valides en se
+       basant sur la connaissance du format d'entrée. Pour trouver des vulnérabilités dans le
+       programme testé, ils testent souvent des cas extrêmes (p. ex. des nombres très grands dans
+       un champ d'entrée, etc.).
+
+Votre travail
+Votre travail consiste à écrire un fuzzer basé sur génération pour un extracteur tar. Le fuzzer doit
+générer automatiquement des fichiers d'entrée (sans muter un fichier donné) et vérifier si
+l'extracteur plante. Les fichiers d'entrée qui font effectivement planter l'extracteur sont sauvegardés.
+
+Nous vous fournissons 6 extracteurs jouets dans la VM du cours, dans /home/student/fuzzer/.
+Les extracteurs s'exécutent avec la commande suivante :
+
+        ./bugX archive.tar
+où archive.tar est le fichier tar.
+
+Nous connaissons au moins six manières différentes de faire planter ces extracteurs jouets (une
+manière par extracteur), c.-à-d. lorsque le programme écrit le message de plantage.
+
+Attention : votre fuzzer sera testé sur d'autres extracteurs que ceux que nous vous donnons. Cela
+signifie que si vous découvrez qu'un extracteur plante pour typeflag=\x90, vous ne pouvez pas coder
+cette valeur en dur dans votre fuzzer. Dans la version d'examen, peut-être que le programme
+plantera pour typeflag=\x91, peut-être qu'il ne plantera pour aucune valeur de typeflag.
+
+Votre fuzzer doit être intelligent : vous ne pouvez pas essayer toutes les valeurs de tous les champs.
+Essayer toutes les valeurs du champ name impliquerait de formater (2⁸)100 archives, ce qui n'est pas
+tenable. Par exemple, vous pouvez supposer de manière sûre que si le champ name accepte chaque
+valeur non-ASCII à chaque position de la chaîne, combiner toutes les chaînes de certains caractères
+non-ASCII est inutile. Cela permettra à votre fuzzer de s'exécuter dans un temps raisonnable.
+
+Votre fuzzer doit fonctionner avec des archives : vous ne pouvez pas simplement essayer différentes
+valeurs pour différents champs dans l'en-tête. Vous devez gérer des en-têtes avec et sans données,
+des archives contenant plusieurs fichiers, etc.
+
+Livrable
+La soumission se fera sur INGInious : https://inginious.info.ucl.ac.be/course/LINFO2347/project
+(la tâche sera ouverte prochainement).
+Vous devez vous inscrire dans un groupe sur INGInious avec votre partenaire pour soumettre.
+Vous devez téléverser un fichier zip avant le vendredi 20 mars à 14:00, contenant exactement :
+    • Le code source de votre fuzzer.
+    • Un Makefile qui compile votre projet en un exécutable nommé fuzzer. L'exécutable généré
+      prend un argument : le chemin vers l'extracteur tar.
+Vous devez implémenter votre fuzzer en C, version 99 ou ultérieure. Le code source doit être
+compilable avec gcc, sur un système Linux x86-64 64 bits, sans dépendances supplémentaires autres
+que les bibliothèques standard. Si vous ne possédez pas d'ordinateur avec cette architecture, vous
+pouvez utiliser les machines des salles étudiantes. Pour tester si votre fuzzer fonctionne
+correctement, nous copierons l'exécutable dans un répertoire avec un extracteur et nous le lancerons
+depuis ce répertoire. Votre fuzzer ne peut dépendre d'aucun autre fichier. Les fichiers d'entrée
+doivent être générés dans le même répertoire. Nous supposerons que tous les fichiers générés dont le
+nom commence par « success_ » contiennent des entrées qui provoquent un plantage.
+Générez un fichier appelé « crashing » pendant le processus.
+
+Conseils d'implémentation
+Vous n'avez pas à faire du fuzzing sur les champs devmajor, devminor, prefix ou padding.
+Le fichier help.c (dans /home/student/fuzzer/) contient :
+   • La structure d'en-tête que vous êtes censés utiliser.
+   • Un exemple de code qui lance un programme donné en argument, analyse sa sortie et vérifie
+     si elle correspond au message de plantage « *** The program has crashed *** ».
+   • Une fonction qui calcule le checksum d'un en-tête et l'écrit dans le champ chksum.
+
+Consignes IA
+L'utilisation d'IA générative pour la production de code est interdite dans ce projet (et serait
+inefficace).
+En cas de doute, l'équipe enseignante se réserve le droit de mener une évaluation orale du projet afin
+de s'assurer que tous les étudiants du groupe maîtrisent le contenu, conformément aux règlements
+EPL sur l'utilisation de l'IA générative.
+
+1 L'extracteur tar est sous licence MIT (disponible sur https://opensource.org/licenses/MIT)
+  Copyright 2026 Tom Rousseaux, Ramin Sadre

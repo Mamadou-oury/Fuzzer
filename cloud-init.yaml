@@ -1,0 +1,261 @@
+#cloud-config
+# LINFO2347 - Computer System Security
+# Cloud-Init configuration for exercises sessions and projects
+#
+# Author: Rémi Van Boxem
+# based on François De Keersmaeker's original work
+#
+# Usage:
+#   Multipass: multipass launch --name linfo2347 --cpus 2 --memory 4G --disk 20G --cloud-init cloud-init.yaml noble
+#   QEMU: Use with -drive file=seed.img (after creating seed image with cloud-localds)
+
+hostname: linfo2347
+timezone: Europe/Brussels
+
+# Create student user
+users:
+  - name: student
+    groups: sudo
+    lock_passwd: false
+    passwd: "$6$rounds=4096$XJW8GQGRUJ1cYAwn$veXtPpmQn7amev5nlOMhZE8.RwgFd4xO.olLcKyWBCqz3OMrc/pynUJm2rjGIZxWG1kFHcssilDzLD1JWcIm5."
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
+# SSH configuration
+ssh_pwauth: true
+disable_root: false
+
+# Package management
+package_update: true
+package_upgrade: true
+
+# Packages to install
+packages:
+  # Essential tools
+  - openssh-server
+  - curl
+  - wget
+  - vim
+  - gcc
+  - unzip
+  - net-tools
+  # Packet capture tools
+  - tcpdump
+  - tshark
+  # Python
+  - python3
+  - python3-pip
+  - python3-scapy
+  # Java
+  - default-jdk
+  - default-jre
+  # Network security tools
+  - snort
+  # Mininet and dependencies
+  - mininet
+  - openvswitch-switch
+  - openvswitch-testcontroller
+  - xterm
+  # DNS tools
+  - dnsmasq
+  - bind9
+  - bind9utils
+  # NTP server
+  - ntp
+  # FTP server
+  - vsftpd
+  # YAF dependencies
+  - libglib2.0-dev
+  - libfixbuf-dev
+  - libpcap-dev
+  # Optional packages (included by default - comment out if not needed)
+  - graphviz
+  - imagemagick
+  - python3-gnuplot
+  - python3-cryptography
+  - python3-pyx
+  - python3-ecdsa
+  - python3-sklearn
+  - python3-paramiko
+
+# Run commands after package installation
+runcmd:
+  # Log start time
+  - echo "=== LINFO2347 VM Provisioning Started ===" | tee -a /var/log/linfo2347-setup.log
+  - date | tee -a /var/log/linfo2347-setup.log
+
+  # Start and enable OpenVSwitch for Mininet
+  - systemctl start openvswitch-switch
+  - systemctl enable openvswitch-switch
+
+  # Create symlink for ovs-testcontroller
+  - ln -sf /usr/bin/ovs-testcontroller /usr/bin/controller 2>/dev/null || true
+
+  # Restart dnsmasq with new configuration
+  - systemctl restart dnsmasq
+  - systemctl enable dnsmasq
+
+  # Install DVWA using the automated script
+  - |
+    echo "Installing DVWA..." | tee -a /var/log/linfo2347-setup.log
+    bash -c "$(curl --fail --show-error --silent --location https://raw.githubusercontent.com/IamCarron/DVWA-Script/main/Install-DVWA.sh)" 2>&1 | tee -a /var/log/linfo2347-setup.log || echo "DVWA installation encountered an issue. Check /var/log/linfo2347-setup.log for details."
+
+  # Download and extract fuzzer for the current architecture
+  - bash /home/student/setup_fuzzer.sh 2>&1 | tee -a /var/log/linfo2347-setup.log
+  - chown -R student:student /home/student/fuzzer/
+
+  # Set permissions for ubuntu home directory files
+  - chown -R ubuntu:ubuntu /home/ubuntu/
+
+  # Log completion
+  - echo "=== LINFO2347 VM Provisioning Completed ===" | tee -a /var/log/linfo2347-setup.log
+  - date | tee -a /var/log/linfo2347-setup.log
+
+# Write configuration files
+write_files:
+  - path: /etc/ssh/ssh_config
+    content: |
+      # Enable SSH agent forwarding
+      ForwardAgent yes
+    append: true
+
+  - path: /etc/dnsmasq.conf
+    content: |
+      port=5353
+      address=/example.com/192.0.2.192
+    owner: root:root
+    permissions: "0644"
+
+  - path: /home/student/setup_yaf.sh
+    content: |
+      #!/bin/bash
+      # YAF Installation Script
+      # NOTE: YAF requires manual download due to license agreement
+      # Download from: https://tools.netsa.cert.org/yaf2/download.html
+
+      YAF_VERSION="2.18.2"
+      YAF_TARBALL="yaf-${YAF_VERSION}.tar.gz"
+
+      if [ ! -f "$YAF_TARBALL" ]; then
+          echo "========================================"
+          echo "YAF Installation Instructions"
+          echo "========================================"
+          echo ""
+          echo "Please download YAF version ${YAF_VERSION} from:"
+          echo "https://tools.netsa.cert.org/yaf2/download.html"
+          echo ""
+          echo "After downloading, place ${YAF_TARBALL} in this directory"
+          echo "and run this script again."
+          exit 1
+      fi
+
+      echo "Extracting YAF..."
+      tar xfz "$YAF_TARBALL"
+
+      echo "Compiling YAF..."
+      cd "yaf-${YAF_VERSION}"
+      ./configure
+      make
+
+      echo ""
+      echo "YAF binaries are now in the 'src' directory."
+      echo "To install system-wide, run:"
+      echo "  cd yaf-${YAF_VERSION}"
+      echo "  sudo make install"
+      echo "  sudo ldconfig"
+    owner: student:student
+    permissions: "0755"
+    defer: true
+
+  - path: /home/student/setup_fuzzer.sh
+    content: |
+      #!/bin/bash
+      # Fuzzer Setup Script
+      # Downloads and extracts the fuzzer archive for the current architecture
+
+      FUZZER_DIR="/home/student/fuzzer"
+      BASE_URL="https://inginious.info.ucl.ac.be/course/LINFO2347/project"
+
+      ARCH=$(uname -m)
+      if [ "$ARCH" = "x86_64" ]; then
+          ZIP_URL="${BASE_URL}/bugs_x86.zip"
+          ZIP_FILE="/tmp/bugs_x86.zip"
+      else
+          ZIP_URL="${BASE_URL}/bugs_arm.zip"
+          ZIP_FILE="/tmp/bugs_arm.zip"
+      fi
+
+      echo "Detected architecture: $ARCH"
+      echo "Downloading fuzzer from $ZIP_URL ..."
+      mkdir -p "$FUZZER_DIR"
+      wget -q -O "$ZIP_FILE" "$ZIP_URL"
+      unzip -o "$ZIP_FILE" -d "$FUZZER_DIR"
+      rm -f "$ZIP_FILE"
+      echo "Fuzzer extracted to $FUZZER_DIR"
+    owner: student:student
+    permissions: "0755"
+    defer: true
+
+  - path: /home/student/README.txt
+    content: |
+      ╔════════════════════════════════════════════════════════════╗
+      ║          LINFO2347 - Computer System Security VM           ║
+      ╚════════════════════════════════════════════════════════════╝
+
+      This VM has been provisioned with tools for the course.
+
+      INSTALLED SOFTWARE:
+      - Network tools: tcpdump, tshark, snort
+      - Python 3 with scapy
+      - Java (JDK/JRE)
+      - Mininet for network emulation
+      - DNS server (dnsmasq, bind9)
+      - FTP server (vsftpd)
+      - DVWA (Damn Vulnerable Web Application)
+
+      IMPORTANT - YAF INSTALLATION:
+      YAF requires manual download due to license agreement.
+      Run: ~/setup_yaf.sh for instructions
+
+      DVWA ACCESS:
+      The DVWA installation may need to be completed.
+      Check the installation logs in /var/log/cloud-init-output.log
+
+      NETWORK SERVICES:
+      - SSH server is running
+      - OpenVSwitch is configured for Mininet
+      - dnsmasq is configured on port 5353
+
+      USEFUL COMMANDS:
+      - View provisioning logs: sudo cat /var/log/cloud-init-output.log
+      - Check service status: systemctl status <service-name>
+      - Test mininet: sudo mn --test pingall
+
+      USER ACCOUNT:
+      - Default user: student
+      - Passwordless sudo enabled
+      - SSH access configured
+
+      For questions or issues, contact your instructor.
+    owner: student:student
+    permissions: "0644"
+    defer: true
+
+# Final message displayed to user
+final_message: |
+  ╔════════════════════════════════════════════════════════════╗
+  ║       LINFO2347 VM Provisioning Complete!                  ║
+  ╚════════════════════════════════════════════════════════════╝
+
+  System is ready for use.
+  Provisioning completed in $UPTIME seconds.
+
+  Default user: student (passwordless sudo enabled)
+
+  IMPORTANT: Check ~/README.txt for important information
+
+  YAF Installation: Run ~/setup_yaf.sh for instructions
+
+  View setup logs: sudo cat /var/log/linfo2347-setup.log
+
+  Happy hacking!

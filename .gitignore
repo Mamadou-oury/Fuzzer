@@ -1,0 +1,16 @@
+# Build artifacts
+fuzzer
+src/*.o
+
+# Fuzz run artifacts
+archive.tar
+crashing
+success_*.tar
+results_*/
+fz_*/
+
+# Logs
+*.log
+
+# Archives
+*.zip
