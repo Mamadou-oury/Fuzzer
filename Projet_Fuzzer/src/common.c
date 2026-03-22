@@ -4,6 +4,10 @@
 
 #include "common.h"
 
+/*
+ * Copy src into dst with truncation if needed.
+ * dst is always NUL-terminated when dst_size > 0.
+ */
 void copy_cstr(char *dst, size_t dst_size, const char *src) {
     size_t n;
 

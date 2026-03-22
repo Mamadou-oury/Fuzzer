@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-/* Constantes du format et de la campagne de fuzzing. */
+/* Format and fuzzing campaign constants. */
 #define BLOCK_SIZE 512U
 #define MAX_CASES 1024U
 #define ARCHIVE_NAME "archive.tar"
@@ -11,7 +11,7 @@
 #define MAX_ENTRIES_PER_CASE 3U
 
 /*
- * Mutations de structure d'archive (niveau "container", pas seulement header).
+ * Archive-structure mutations (container-level, not only header-level).
  */
 enum archive_mutation {
     AM_NONE = 0,
@@ -30,8 +30,8 @@ enum archive_mutation {
 };
 
 /*
- * Header POSIX TAR (512 octets).
- * Cette structure est la base de generation des entrees d'archives.
+ * POSIX TAR header (512 bytes).
+ * This structure is the base used to generate archive entries.
  */
 struct tar_t {
     char name[100];
@@ -54,8 +54,8 @@ struct tar_t {
 };
 
 /*
- * Mutations de header appliquees de maniere ciblee.
- * Certaines conservent un checksum valide, d'autres le corrompent volontairement.
+ * Targeted header mutations.
+ * Some keep a valid checksum, others intentionally corrupt it.
  */
 enum header_mutation {
     MUT_NONE = 0,
@@ -105,9 +105,9 @@ enum header_mutation {
 };
 
 /*
- * Description d'une entree TAR a ecrire.
- * declared_size: valeur ecrite dans le header
- * payload_size: octets reellement ecrits apres le header
+ * Description of one TAR entry to write.
+ * declared_size: value written in the header
+ * payload_size: bytes effectively written after the header
  */
 struct fuzz_entry {
     char name[100];
@@ -123,10 +123,10 @@ struct fuzz_entry {
 };
 
 /*
- * Une archive generee pour un test.
- * On supporte 1 a 3 entrees pour tester les parseurs multi-headers.
- * archive_mutation + (eof/leading/trailing/cut_tail) permettent de casser la
- * structure globale du conteneur TAR.
+ * One generated archive for a test case.
+ * We support 1 to 3 entries to exercise multi-header parsers.
+ * archive_mutation + (eof/leading/trailing/cut_tail) allow breaking
+ * the global TAR container structure.
  */
 struct fuzz_case {
     size_t entry_count;

@@ -12,8 +12,8 @@
 #include "tar_writer.h"
 
 /*
- * Remplit un champ avec un motif alphabetique (sans forcement inserer '\0').
- * Utile pour des mutations de champs non termines.
+ * Fill a field with an alphabetic pattern (without forcing '\0').
+ * Useful for non-terminated-field mutation scenarios.
  */
 static void fill_field_pattern(char *field, size_t len, unsigned int seed, char base) {
     size_t i;
@@ -23,7 +23,7 @@ static void fill_field_pattern(char *field, size_t len, unsigned int seed, char 
 }
 
 /*
- * Remplit un champ avec des octets non-ASCII (bit de poids fort a 1).
+ * Fill a field with non-ASCII bytes (high bit set).
  */
 static void fill_field_highbit(char *field, size_t len, unsigned int seed) {
     size_t i;
@@ -33,8 +33,8 @@ static void fill_field_highbit(char *field, size_t len, unsigned int seed) {
 }
 
 /*
- * Encode un entier dans un champ octal ASCII TAR.
- * Exemple: 420 decimal devient "0000644" pour un champ mode.
+ * Encode an integer into a TAR ASCII-octal field.
+ * Example: decimal 420 becomes "0000644" for a mode field.
  */
 static void write_octal_field(char *field, size_t field_size, unsigned long value) {
     if (field_size == 0U) {
@@ -45,10 +45,10 @@ static void write_octal_field(char *field, size_t field_size, unsigned long valu
 }
 
 /*
- * Calcule le checksum TAR:
- * - chksum est temporairement rempli d'espaces
- * - on somme les 512 octets du header
- * - on reencode la somme en octal ASCII
+ * Compute TAR checksum:
+ * - chksum is temporarily filled with spaces
+ * - all 512 header bytes are summed
+ * - the sum is re-encoded as ASCII octal
  */
 static unsigned int calculate_checksum(struct tar_t *entry) {
     unsigned int check = 0U;
@@ -67,8 +67,8 @@ static unsigned int calculate_checksum(struct tar_t *entry) {
 }
 
 /*
- * Applique les mutations qui doivent intervenir AVANT le checksum.
- * Le checksum calcule ensuite "valide" la mutation (sauf si on le casse apres).
+ * Apply mutations that must happen BEFORE checksum calculation.
+ * The checksum then validates the mutation (unless we corrupt it later).
  */
 static void apply_pre_checksum_mutation(struct tar_t *header,
                                         enum header_mutation mutation,
@@ -237,7 +237,7 @@ static void apply_pre_checksum_mutation(struct tar_t *header,
 }
 
 /*
- * Applique les mutations qui doivent intervenir APRES le checksum.
+ * Apply mutations that must happen AFTER checksum calculation.
  */
 static void apply_post_checksum_mutation(struct tar_t *header,
                                          enum header_mutation mutation) {
@@ -249,7 +249,7 @@ static void apply_post_checksum_mutation(struct tar_t *header,
 }
 
 /*
- * Construit le header final d'une entree.
+ * Build the final header for one entry.
  */
 static void init_header(struct tar_t *header,
                         const struct fuzz_entry *entry,
@@ -278,14 +278,14 @@ static void init_header(struct tar_t *header,
 }
 
 /*
- * Taille de padding pour aligner les donnees sur 512 octets.
+ * Padding length needed to align payload data to 512 bytes.
  */
 static size_t block_padding(size_t payload_size) {
     return (BLOCK_SIZE - (payload_size % BLOCK_SIZE)) % BLOCK_SIZE;
 }
 
 /*
- * Remplit un payload avec un motif deterministe pour ce cas.
+ * Fill payload with a deterministic pattern for this case.
  */
 static void fill_payload(unsigned char *data, size_t len, unsigned int seed) {
     size_t i;
@@ -295,8 +295,8 @@ static void fill_payload(unsigned char *data, size_t len, unsigned int seed) {
 }
 
 /*
- * Ecrit une entree complete (header + payload + padding optionnel).
- * Si write_padding == 0, on saute volontairement l'alignement 512 octets.
+ * Write one complete entry (header + payload + optional padding).
+ * If write_padding == 0, 512-byte alignment is intentionally skipped.
  */
 struct entry_layout {
     long header_start;
@@ -386,11 +386,11 @@ static int write_entry(FILE *out,
 }
 
 /*
- * Ecrit l'archive complete:
- * - N entrees (1..3)
- * - fin TAR configurable (0/1/2 blocs zero)
- * - garbage optionnel apres la fin
- * - troncature optionnelle de la fin de fichier
+ * Write the full archive:
+ * - N entries (1..3)
+ * - configurable TAR end blocks (0/1/2 zero blocks)
+ * - optional trailing/leading garbage
+ * - optional end-of-file truncation
  */
 int write_archive(const char *path, const struct fuzz_case *fcase, unsigned int seed) {
     FILE *out;

@@ -12,6 +12,10 @@
 #include "common.h"
 #include "runtime.h"
 
+/*
+ * Run extractor_path archive_path and detect crash by stdout banner.
+ * Returns: 1 crash found, 0 no crash, -1 execution error.
+ */
 int run_extractor_and_detect_crash(const char *extractor_path, const char *archive_path) {
     char cmd[1024];
     FILE *fp;
@@ -41,6 +45,7 @@ int run_extractor_and_detect_crash(const char *extractor_path, const char *archi
     return crashed;
 }
 
+/* Binary file copy helper for saving crashing archives. */
 int copy_file(const char *src, const char *dst) {
     FILE *in;
     FILE *out;
@@ -71,6 +76,7 @@ int copy_file(const char *src, const char *dst) {
     return 0;
 }
 
+/* Create/update the required "crashing" marker file. */
 int mark_crashing(void) {
     FILE *marker = fopen(CRASH_MARKER, "w");
     if (marker == NULL) {
@@ -83,6 +89,7 @@ int mark_crashing(void) {
     return fclose(marker);
 }
 
+/* Remove empty parent directories of a relative path. */
 static void cleanup_parent_dirs(const char *path) {
     char tmp[256];
     char *slash;
@@ -99,14 +106,15 @@ static void cleanup_parent_dirs(const char *path) {
     }
 }
 
+/* Remove one path safely, then prune empty parent directories. */
 static void cleanup_path(const char *path) {
     if (path[0] == '\0') {
         return;
     }
 
     /*
-     * Garde-fous: ne jamais supprimer en dehors du dossier courant.
-     * On ignore les chemins absolus et ceux contenant "..".
+     * Safety guardrails: never delete outside the current directory.
+     * Ignore absolute paths and any path containing "..".
      */
     if (path[0] == '/' || strstr(path, "..") != NULL) {
         return;
@@ -121,6 +129,7 @@ static void cleanup_path(const char *path) {
     cleanup_parent_dirs(path);
 }
 
+/* Recursively delete a relative file tree rooted at path. */
 static int remove_tree_recursive(const char *path) {
     struct stat st;
 
@@ -165,6 +174,7 @@ static int remove_tree_recursive(const char *path) {
     return unlink(path);
 }
 
+/* Remove all top-level entries starting with "fz_<run_nonce>_". */
 void cleanup_run_prefix(unsigned long run_nonce) {
     char prefix[64];
     DIR *dir;
@@ -194,6 +204,7 @@ void cleanup_run_prefix(unsigned long run_nonce) {
     (void)closedir(dir);
 }
 
+/* Best-effort cleanup of entry names emitted in one fuzz case. */
 void cleanup_case_artifacts(const struct fuzz_case *fcase) {
     size_t i;
     for (i = 0; i < fcase->entry_count; i++) {
